@@ -25,5 +25,7 @@ public:
 	//何かと当たった時の処理 location=当たった相手の座標 erea=当たった相手の大きさ type=当たった相手の種類(0=ステージ 1=プレイヤー 2=敵 3=炎 4=木 5=水)
 	virtual void Hit(Location _location,Erea _erea,int _type) = 0;
 
+	virtual bool SearchColor(Object* ob) = 0;
+
 	int GetObjectType() { return type; }
 };

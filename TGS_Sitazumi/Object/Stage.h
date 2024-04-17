@@ -50,7 +50,7 @@ class Stage :
 {
 private:
 	int x_move;					//フレーム測定用
-	int type;					//ブロックの種類(0=無 1=白 2=灰 3=赤 4=緑 5=青 6=炎 7=木 8=水 9=初期スポーン(Editのみ表示))
+	//int type;					//ブロックの種類(0=無 1=白 2=灰 3=赤 4=緑 5=青 6=炎 7=木 8=水 9=初期スポーン(Editのみ表示))
 	int frame;					//フレーム測定用
 	int block_type;				//ブロックの種類(0=無 1=白 2=灰 3=赤 4=緑 5=青 6=炎 7=木 8=水 9=初期スポーン(Editのみ表示))
 	bool inv_flg;				//ブロックに触れるか判断
@@ -65,6 +65,9 @@ public:
 	void Update()override;
 	void Draw()const override;
 	void Hit(Location _location, Erea _erea, int _type)override;
+	bool SearchColor(Object* ob) override {
+		return false;
+	}
 	//ステージの当たり判定の種類取得(0=当たり判定無し1=当たり判定あり)
 	bool GetStageCollisionType();
 	//ステージのタイプ設定

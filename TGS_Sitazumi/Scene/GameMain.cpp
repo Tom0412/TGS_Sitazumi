@@ -48,9 +48,14 @@ AbstractScene* GameMain::Update()
 				chara_object[i]->Hit(chara_object[j]->GetLocation(), chara_object[j]->GetErea(), chara_object[j]->GetObjectType());
 				chara_object[j]->Hit(chara_object[i]->GetLocation(), chara_object[i]->GetErea(), chara_object[i]->GetObjectType());
 			}
+
+			if (chara_object[i]->GetObjectType() == PLAYER) {
+				if (chara_object[j]->GetObjectType() == BLOCK) {
+					chara_object[i]->SearchColor(chara_object[j]);
+				}
+			}
 		}
 	}
-
 #ifdef _DEBUG
 	//ステージをいじるシーンへ遷移
 	if (KeyInput::OnPresed(KEY_INPUT_E) && KeyInput::OnPresed(KEY_INPUT_D))

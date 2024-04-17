@@ -1,5 +1,6 @@
 #include "Player.h"
 #include "../Utility/PadInput.h"
+#include "../Utility/KeyInput.h"
 #include "../Utility/ResourceManager.h"
 #include <math.h>
 
@@ -20,6 +21,9 @@ Player::Player()
 	aimLoc = { 40,200 };
 	aimVec = { 0,0 };
 	lineLoc = { 0,0 };
+
+	searchedLen = 1000.f;
+	searchedObj = nullptr;
 }
 
 Player::~Player()
@@ -39,6 +43,10 @@ void Player::Update()
 		vector.y = 0.f;
 	}
 
+	if (PadInput::OnButton(XINPUT_BUTTON_Y)) {
+		ChangePlayerColor();
+	}
+
 	MoveActor();
 	MoveAim();
 
@@ -50,6 +58,8 @@ void Player::Update()
 		stageHitFlg[1][i] = false;
 	}
 
+	searchedLen = 1000.f;
+	searchedObj = nullptr;
 
 }
 
@@ -60,12 +70,13 @@ void Player::Draw()const
 
 	DrawCircle(aimLoc.x, aimLoc.y, 10, color, TRUE);
 
-	DrawLine(local_location.x + (erea.width / 2), local_location.y + (erea.height / 2), lineLoc.x, lineLoc.y, color);
-
-	for (int i = 0; i < 4; i++) {
-		DrawFormatString(20 + i * 20, 0, 0xff0000, "%d", stageHitFlg[0][i]);
-		DrawFormatString(20 + i * 20, 40, 0xff0000, "%d", stageHitFlg[1][i]);
+	if (searchedObj != nullptr) {
+		DrawCircle(searchedObj->GetLocalLocation().x, searchedObj->GetLocalLocation().y, 50, 0xffff00, TRUE);
+		DrawFormatString(640, 80, 0xffff00, "%f", searchedObj->GetLocalLocation().x);
+		DrawFormatString(640, 100, 0xff0000, "%f", searchedObj->GetLocalLocation().y);
 	}
+
+	DrawLine(local_location.x + (erea.width / 2), local_location.y + (erea.height / 2), lineLoc.x, lineLoc.y, color);
 
 	DrawFormatString(80, 80, 0xffff00, "%f", location.x);
 	DrawFormatString(20, 100, 0xff0000, "%f", location.y);
@@ -74,6 +85,7 @@ void Player::Draw()const
 
 void Player::Hit(Location _location, Erea _erea, int _type)
 {
+	
 	//ブロックと当たった時の処理
 	if (_type == BLOCK)
 	{
@@ -81,21 +93,11 @@ void Player::Hit(Location _location, Erea _erea, int _type)
 		Erea tmpe = erea;
 
 		erea.height = 1.f;
-		erea.width = tmpe.width - 10.f;
+		erea.width = tmpe.width - 0.f;
 
-		//�v���C���[�̏㑤
-		//location.y -= tmpe.height / 2;
-		if (!stageHitFlg[1][top]) {
-			stageHitFlg[0][top] = true;
-			stageHitFlg[1][top] = true;
-		}
-		else {
-			stageHitFlg[0][top] = false;
-		}
-
-		//�v���C���[�̉���
+		//プレイヤー下方向の判定
 		location.y += tmpe.height;
-		if (!stageHitFlg[1][bottom]) {
+		if (CheckCollision(_location,_erea) && !stageHitFlg[1][bottom]) {
 			stageHitFlg[0][bottom] = true;
 			stageHitFlg[1][bottom] = true;
 		}
@@ -103,11 +105,14 @@ void Player::Hit(Location _location, Erea _erea, int _type)
 			stageHitFlg[0][bottom] = false;
 		}
 
-		//���P�[�V�����A������߂�
+		//戻す
 		location.y = tmpl.y;
 		erea.height = tmpe.height;
-		//���܂�h�~(�㉺)
-		if (stageHitFlg[0][bottom]) {//���̖��܂�h�~
+		erea.width = tmpe.width;
+
+
+		//下方向に埋まらないようにする
+		if (stageHitFlg[0][bottom]) {//下方向に埋まっていたら
 			float t = _location.y - (location.y + erea.height);
 			if (t != 0) {
 				location.y += t;
@@ -115,15 +120,13 @@ void Player::Hit(Location _location, Erea _erea, int _type)
 		}
 
 
-
-
-		//���E�G���A�̐ݒ�
-		erea.height = tmpe.height - 10;
+		//高さ、幅の変更
+		erea.height = tmpe.height - 0.f;
 		erea.width = 1;
 
-		//�v���C���[�̍���
+		//プレイヤー左方向の判定
 		//location.x -= tmpe.width / 2;
-		if (!stageHitFlg[1][left]) {
+		if (CheckCollision(_location, _erea) && !stageHitFlg[1][left]) {
 			stageHitFlg[0][left] = true;
 			stageHitFlg[1][left] = true;
 
@@ -132,9 +135,9 @@ void Player::Hit(Location _location, Erea _erea, int _type)
 			stageHitFlg[0][left] = false;
 		}
 
-		//�v���C���[�̉E��
+		//プレイヤー右方向の判定
 		location.x += tmpe.width;
-		if (!stageHitFlg[1][right]) {
+		if (CheckCollision(_location, _erea) && !stageHitFlg[1][right]) {
 			stageHitFlg[0][right] = true;
 			stageHitFlg[1][right] = true;
 		}
@@ -142,12 +145,60 @@ void Player::Hit(Location _location, Erea _erea, int _type)
 			stageHitFlg[0][right] = false;
 		}
 
+		//最初の値に戻す
 
-
-		//���ɖ߂�
 		location.x = tmpl.x;
+
 		erea.height = tmpe.height;
 		erea.width = tmpe.width;
+
+
+
+		//左方向に埋まらないようにする
+		if (stageHitFlg[0][left]) {//左方向に埋まっていたら
+			float t = (_location.x + _erea.width) - location.x;
+			if (t != 0) {
+				location.x += t;
+			}
+		}
+
+		//右方向に埋まらないようにする
+		if (stageHitFlg[0][right]) {//右方向に埋まっていたら
+			float t = _location.x - (location.x + erea.width);
+			if (t != 0) {
+				location.x += t;
+			}
+		}
+
+
+		location.x += 10;
+		erea.height = 1.f;
+		erea.width = tmpe.width - 10.f;
+
+		//プレイヤー上方向の判定
+		//location.y -= tmpe.height / 2;
+		if (CheckCollision(_location, _erea) && !stageHitFlg[1][top]) {
+			stageHitFlg[0][top] = true;
+			stageHitFlg[1][top] = true;
+		}
+		else {
+			stageHitFlg[0][top] = false;
+		}
+
+		//上方向に埋まらないようにする(デバックまだ)
+		if (stageHitFlg[0][top]) {//上方向に埋まっていたら
+			float t = (_location.y + _erea.height) - location.y;
+			if (t != 0) {
+				location.y += t;
+			}
+		}
+
+		location.x -= 10;
+
+		erea.height = tmpe.height;
+		erea.width = tmpe.width;
+
+
 	}
 }
 
@@ -159,10 +210,19 @@ void Player::MoveActor()
 	}
 
 	//左右移動
-	if (PadInput::TipLeftLStick(STICKL_X) > 0.2) {
+	/*if (PadInput::TipLeftLStick(STICKL_X) > 0.2) {
 		vector.x = 1.f;
 	}
 	else if (PadInput::TipLeftLStick(STICKL_X) < -0.2) {
+		vector.x = -1.f;
+	}
+	else {
+		vector.x = 0.f;
+	}*/
+	if (KeyInput::OnKey(KEY_INPUT_D)) {
+		vector.x = 1.f;
+	}
+	else if (KeyInput::OnKey(KEY_INPUT_A)) {
 		vector.x = -1.f;
 	}
 	else {
@@ -191,110 +251,70 @@ void Player::MoveAim()
 	lineLoc.y = local_location.y + (erea.height / 2) + aimVec.y * 1000.f;
 }
 
-bool Player::CheckCollision(Stage* stage)
+bool Player::SearchColor(Object* ob)
 {
-	Location tmpl = location;
-	Erea tmpe = erea;
-	if (location.x == 220) {
-		return true;
+	if (ob->GetColerData() != 0) {
+		Location tmpLoc;
+		float tmpLen;
+		for (int i = 0; i < 100; i++)
+		{
+			tmpLoc.x = local_location.x + (aimVec.x * 10 * i);
+			tmpLoc.y = local_location.y + (aimVec.y * 10 * i);
+			if (tmpLoc.x < 0 || tmpLoc.x > 1280 || tmpLoc.y < 0 || tmpLoc.y > 720) break;
+
+			//tmpLen = sqrtf(powf(tmpLoc.x - ob->GetLocation().x, 2) + powf(tmpLoc.y - ob->GetLocation().y, 2));
+			tmpLen = sqrtf(powf(ob->GetLocalLocation().x - tmpLoc.x, 2) + powf(ob->GetLocalLocation().y - tmpLoc.y, 2));
+
+			if (tmpLen < searchedLen) {
+				searchedLen = tmpLen;
+				searchedObj = ob;
+			}
+		}
 	}
-	if (stage->GetStageType() != 0) {
-
-		erea.height = 1.f;
-		erea.width = tmpe.width - 10.f;
-
-		//プレイヤー上方向の判定
-		//location.y -= tmpe.height / 2;
-		if (stage->HitBox(this) && !stageHitFlg[1][top]) {
-			stageHitFlg[0][top] = true;
-			stageHitFlg[1][top] = true;
-		}
-		else {
-			stageHitFlg[0][top] = false;
-		}
-
-		//プレイヤー下方向の判定
-		location.y += tmpe.height;
-		if (stage->HitBox(this) && !stageHitFlg[1][bottom]) {
-			stageHitFlg[0][bottom] = true;
-			stageHitFlg[1][bottom] = true;
-		}
-		else {
-			stageHitFlg[0][bottom] = false;
-		}
-
-		//戻す
-		location.y = tmpl.y;
-		erea.height = tmpe.height;
-
-		//上方向に埋まらないようにする(デバックまだ)
-		if (stageHitFlg[0][top]) {//上方向に埋まっていたら
-			float t = (stage->GetLocation().y + stage->GetErea().height) - location.y;
-			if (t != 0) {
-				location.y += t;
-			}
-		}
-
-		//下方向に埋まらないようにする
-		if (stageHitFlg[0][bottom]) {//下方向に埋まっていたら
-			float t = stage->GetLocation().y - (location.y + erea.height);
-			if (t != 0) {
-				location.y += t;
-			}
-		}
 
 
-
-
-		//高さ、幅の変更
-		erea.height = tmpe.height - 10;
-		erea.width = 1;
-
-		//プレイヤー左方向の判定
-		//location.x -= tmpe.width / 2;
-		if (stage->HitBox(this) && !stageHitFlg[1][left]) {
-			stageHitFlg[0][left] = true;
-			stageHitFlg[1][left] = true;
-
-		}
-		else {
-			stageHitFlg[0][left] = false;
-		}
-
-		//プレイヤー右方向の判定
-		location.x += tmpe.width;
-		if (stage->HitBox(this) && !stageHitFlg[1][right]) {
-			stageHitFlg[0][right] = true;
-			stageHitFlg[1][right] = true;
-		}
-		else {
-			stageHitFlg[0][right] = false;
-		}
-
-		//最初の値に戻す
-		erea.height = tmpe.height;
-		erea.width = tmpe.width;
-
-		location.x = tmpl.x;
-
-		//左方向に埋まらないようにする
-		if (stageHitFlg[0][left]) {//左方向に埋まっていたら
-			float a = stage->GetLocation().x + stage->GetErea().width;
-			float b = location.x;
-			float t = (stage->GetLocation().x + stage->GetErea().width) - location.x;
-			if (t != 0) {
-				location.x += t;
-			}
-		}
-
-		//右方向に埋まらないようにする
-		if (stageHitFlg[0][right]) {//右方向に埋まっていたら
-			float t = stage->GetLocation().x - (location.x + erea.width);
-			if (t != 0) {
-				location.x += t;
-			}
-		}
-
-	}
 	return false;
+}
+
+bool Player::ChangePlayerColor()
+{
+	color = RED;
+	return false;
+}
+
+bool Player::CheckCollision(Location l, Erea e)
+{
+	bool ret = false;
+
+	//自分の左上座標
+	float my_x = location.x;
+	float my_y = location.y;
+	//自分の中央座標
+	float my_cx = my_x + (erea.width / 2);
+	float my_cy = my_y + (erea.height / 2);
+	//自分の幅と高さの半分
+	float my_harf_width = erea.width / 2;
+	float my_harf_height = erea.height / 2;
+
+	//相手の左上座標
+	float sub_x = l.x;
+	float sub_y = l.y;
+	//相手の中央座標
+	float sub_cx = sub_x + (e.width / 2);
+	float sub_cy = sub_y + (e.height / 2);
+	//相手の幅と高さの半分
+	float sub_harf_width = e.width / 2;
+	float sub_harf_height = e.height / 2;
+
+	//自分と相手の中心座標の差
+	float diff_x = my_cx - sub_cx;
+	float diff_y = my_cy - sub_cy;
+
+	//当たり判定の演算
+	if (fabsf(diff_x) < my_harf_width + sub_harf_width &&
+		fabsf(diff_y) < my_harf_height + sub_harf_height)
+	{
+		ret = true;
+	}
+	return ret;
 }
